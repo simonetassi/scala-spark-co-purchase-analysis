@@ -1,0 +1,10 @@
+.bsp/
+
+project/
+project/target/
+
+target/
+target/streams/
+
+src/test/
+src/main/resources
