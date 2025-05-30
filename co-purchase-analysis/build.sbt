@@ -1,9 +1,9 @@
-ThisBuild / version := "0.1.0-SNAPSHOT"
+ThisBuild / version := "0.1.0"
 ThisBuild / scalaVersion := "2.12.18"
 
 lazy val root = (project in file("."))
   .settings(
-    name := "scala-spark-co-purchase-analysis"
+    name := "co-purchase-analysis"
   )
 
 javacOptions ++= Seq("-source", "11", "-target", "11")

@@ -40,7 +40,8 @@ object CoPurchaseAnalyzer {
       .partitionBy(new HashPartitioner(nPartitions))
       .reduceByKey(_ + _)
       .map { case (pair, count) => CoPurchaseResult(pair, count) }
-      .sortBy(_.frequency, ascending = false)
+      // .sortBy(_.frequency, ascending = false)
+      .coalesce(1)
   }
 
   def analyzeCoPurchases(inputPath: String, outputPath: String, numPartitions: Int): Unit = {
@@ -86,7 +87,7 @@ object CoPurchaseAnalyzer {
       case _: NumberFormatException =>
         println(s"Invalid partition number: ${args(2)}")
         System.exit(1)
-        0 // This won't be reached, but satisfies the compiler
+        ???
     }
     
     if (numPartitions <= 0) {
