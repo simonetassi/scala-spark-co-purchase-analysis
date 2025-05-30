@@ -1,6 +1,7 @@
 package com.scp.app
 
-import org.apache.spark.{SparkConf, SparkContext, HashPartitioner}
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.HashPartitioner
 import org.apache.spark.rdd.RDD
 
 object CoPurchaseAnalyzer {
@@ -41,19 +42,23 @@ object CoPurchaseAnalyzer {
       .reduceByKey(_ + _)
       .map { case (pair, count) => CoPurchaseResult(pair, count) }
       // .sortBy(_.frequency, ascending = false)
-      .coalesce(1)
   }
 
-  def analyzeCoPurchases(inputPath: String, outputPath: String, numPartitions: Int): Unit = {
-    val conf = new SparkConf()
-      .setAppName("CoPurchase Analysis").setMaster("local[*]")
-      // .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-    
-    val sc = new SparkContext(conf)
+  def analyzeCoPurchases(inputPath: String, outputPath: String): Unit = {
+    val spark = SparkSession.builder()
+      .appName("CoPurchase Analysis")
+      .master(sys.props.getOrElse("spark.master", "local[*]"))     
+      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer") 
+      .getOrCreate()
+
+    val cores = spark.conf.get("spark.executor.cores", "4").toInt
+    val nodes = spark.conf.get("spark.executor.instances", "4").toInt
+    val numPartitions =
+      math.max(cores * nodes * 2, spark.sparkContext.defaultParallelism * 2)
     
     try {
       // Read and parse input data directly into tuples
-      val rawData = sc.textFile(inputPath)
+      val rawData = spark.sparkContext.textFile(inputPath)
       val orders = rawData.map(parseOrderLine)
       
       // Extract product pairs from customer orders
@@ -63,38 +68,25 @@ object CoPurchaseAnalyzer {
       val coPurchaseResults = calculateCoPurchaseFrequencies(productPairs, numPartitions)
       
       // Save results as CSV
-      val csvOutput = coPurchaseResults.map(_.toCsvString)
+      val csvOutput = coPurchaseResults.map(_.toCsvString).coalesce(1)
       csvOutput.saveAsTextFile(outputPath)
       
       println(s"Co-purchase analysis completed. Results saved to: $outputPath")
       
     } finally {
-      sc.stop()
+      spark.stop()
     }
   }
 
   def main(args: Array[String]): Unit = {
-    if (args.length != 3) {
-      println("Usage: CoPurchaseAnalyzer <input_path> <output_path> <num_partitions>")
+    if (args.length != 2) {
+      println("Usage: CoPurchaseAnalyzer <input_path> <output_path>")
       System.exit(1)
     }
     
     val inputPath = args(0)
     val outputPath = args(1)
-    val numPartitions = try {
-      args(2).toInt
-    } catch {
-      case _: NumberFormatException =>
-        println(s"Invalid partition number: ${args(2)}")
-        System.exit(1)
-        ???
-    }
     
-    if (numPartitions <= 0) {
-      println("Number of partitions must be positive")
-      System.exit(1)
-    }
-    
-    analyzeCoPurchases(inputPath, outputPath, numPartitions)
+    analyzeCoPurchases(inputPath, outputPath)
   }
 }
