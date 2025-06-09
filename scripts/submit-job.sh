@@ -14,18 +14,38 @@ if [ "$num_workers" -lt 1 ] || [ "$num_workers" -gt 4 ]; then
    exit 1
 fi
 
-# Get current cluster configuration
-cluster_info=$(gcloud dataproc clusters describe "${CLUSTER_NAME}" \
+# Get current cluster configuration using separate gcloud calls for reliability
+worker_instances=$(gcloud dataproc clusters describe "${CLUSTER_NAME}" \
    --region="${REGION}" \
-   --format="value(config.workerConfig.numInstances,config.masterConfig.numInstances)" 2>/dev/null)
+   --format="value(config.workerConfig.numInstances)" 2>/dev/null)
+
+master_instances=$(gcloud dataproc clusters describe "${CLUSTER_NAME}" \
+   --region="${REGION}" \
+   --format="value(config.masterConfig.numInstances)" 2>/dev/null)
 
 if [ $? -eq 0 ]; then
-   # Cluster exists - parse the configuration
-   worker_instances=$(echo "$cluster_info" | cut -f1)
-   master_instances=$(echo "$cluster_info" | cut -f2)
+   # Cluster exists - validate and set defaults for empty values
+   
+   # Handle case where workerConfig doesn't exist (single-node cluster)
+   if [ -z "$worker_instances" ] || [ "$worker_instances" = "" ]; then
+       worker_instances=0
+   fi
+   
+   # Handle case where masterConfig doesn't exist (shouldn't happen, but be safe)
+   if [ -z "$master_instances" ] || [ "$master_instances" = "" ]; then
+       master_instances=1
+   fi
+   
+   # Ensure we have valid numbers
+   if ! [ "$worker_instances" -eq "$worker_instances" ] 2>/dev/null; then
+       worker_instances=0
+   fi
+   if ! [ "$master_instances" -eq "$master_instances" ] 2>/dev/null; then
+       master_instances=1
+   fi
    
    # Determine current cluster type
-   if [ "$master_instances" -eq 1 ] && [ -z "$worker_instances" -o "$worker_instances" -eq 0 ]; then
+   if [ "$master_instances" -eq 1 ] && [ "$worker_instances" -eq 0 ]; then
        current_workers=1  # Single-node cluster
        is_single_node=true
    else
@@ -35,9 +55,11 @@ if [ $? -eq 0 ]; then
    
    echo "Current cluster configuration: $current_workers workers (single-node: $is_single_node)"
    echo "Requested configuration: $num_workers workers"
+   echo "Debug: master_instances=$master_instances, worker_instances=$worker_instances"
    
    # Check if we need to recreate the cluster
    need_recreate=false
+   need_update=false
    
    if [ "$num_workers" -eq 1 ] && [ "$is_single_node" = "false" ]; then
        echo "Need to recreate: switching from multi-node to single-node"
@@ -45,14 +67,10 @@ if [ $? -eq 0 ]; then
    elif [ "$num_workers" -ne 1 ] && [ "$is_single_node" = "true" ]; then
        echo "Need to recreate: switching from single-node to multi-node"
        need_recreate=true
-   elif [ "$num_workers" != "$current_workers" ]; then
-       if [ "$is_single_node" = "false" ]; then
-           echo "Updating cluster workers from $current_workers to $num_workers..."
-           gcloud dataproc clusters update "${CLUSTER_NAME}" \
-               --region="${REGION}" \
-               --num-workers="$num_workers"
-       fi
-   else
+   elif [ "$num_workers" != "$current_workers" ] && [ "$is_single_node" = "false" ]; then
+       echo "Can update cluster workers from $current_workers to $num_workers..."
+       need_update=true
+   elif [ "$num_workers" = "$current_workers" ]; then
        echo "Cluster already has the correct configuration"
    fi
    
@@ -65,6 +83,11 @@ if [ $? -eq 0 ]; then
        
        echo "Creating new cluster with $num_workers workers..."
        scripts/create-cluster.sh "$num_workers"
+   elif [ "$need_update" = "true" ]; then
+       echo "Updating cluster workers from $current_workers to $num_workers..."
+       gcloud dataproc clusters update "${CLUSTER_NAME}" \
+           --region="${REGION}" \
+           --num-workers="$num_workers"
    fi
    
 else

@@ -16,7 +16,7 @@ if [ "$num_workers" -eq 1 ]; then
        --region="${REGION}" \
        --single-node \
        --master-boot-disk-size=400 \
-       --master-machine-type=n2-standard-4
+       --master-machine-type=n1-standard-4
 else
    echo "Creating multi-node cluster with $num_workers worker nodes..."
    gcloud dataproc clusters create "${CLUSTER_NAME}" \
@@ -24,6 +24,6 @@ else
        --num-workers="$num_workers" \
        --master-boot-disk-size=400 \
        --worker-boot-disk-size=400 \
-       --master-machine-type=n2-standard-4 \
-       --worker-machine-type=n2-standard-2
+       --master-machine-type=n1-standard-4 \
+       --worker-machine-type=n1-standard-4
 fi
