@@ -57,6 +57,10 @@ object CoPurchaseAnalyzer {
       math.max(cores * nodes * 2, spark.sparkContext.defaultParallelism * 2)
     
     try {
+      // Register start time
+      val startTime = System.currentTimeMillis() 
+
+
       // Read and parse input data directly into tuples
       val rawData = spark.sparkContext.textFile(inputPath)
       val orders = rawData.map(parseOrderLine)
@@ -71,8 +75,14 @@ object CoPurchaseAnalyzer {
       val csvOutput = coPurchaseResults.map(_.toCsvString).coalesce(1)
       csvOutput.saveAsTextFile(outputPath)
       
-      println(s"Co-purchase analysis completed. Results saved to: $outputPath")
+      // Register end time
+      val endTime = System.currentTimeMillis()
+
+      // Calculate elapsed time 
+      val elapsedTime = endTime - startTime
       
+      println(s"Co-purchase analysis completed in ${elapsedTime}ms (${elapsedTime/1000.0}s)")
+      println(s"Results saved to: $outputPath")      
     } finally {
       spark.stop()
     }
