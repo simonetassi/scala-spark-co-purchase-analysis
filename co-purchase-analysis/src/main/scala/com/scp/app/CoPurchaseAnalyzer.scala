@@ -47,6 +47,9 @@ object CoPurchaseAnalyzer {
   def analyzeCoPurchases(inputPath: String, outputPath: String): Unit = {
     val spark = SparkSession.builder()
       .appName("CoPurchase Analysis")
+      .config("spark.executor.memory", "6g")
+      .config("spark.executor.cores", "4")
+      .config("spark.driver.memory", "4g")
       .master(sys.props.getOrElse("spark.master", "local[*]"))     
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer") 
       .getOrCreate()
@@ -72,7 +75,7 @@ object CoPurchaseAnalyzer {
       val coPurchaseResults = calculateCoPurchaseFrequencies(productPairs, numPartitions)
       
       // Save results as CSV
-      val csvOutput = coPurchaseResults.map(_.toCsvString).coalesce(1)
+      val csvOutput = coPurchaseResults.map(_.toCsvString).repartition(1)
       csvOutput.saveAsTextFile(outputPath)
       
       // Register end time
