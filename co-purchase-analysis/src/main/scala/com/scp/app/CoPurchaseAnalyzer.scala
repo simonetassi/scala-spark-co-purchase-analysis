@@ -5,43 +5,18 @@ import org.apache.spark.HashPartitioner
 import org.apache.spark.rdd.RDD
 
 object CoPurchaseAnalyzer {
-  case class ProductPair(product1: Int, product2: Int) {
-    def toSortedString: String = s"$product1,$product2"
-  }
-
-  case class CoPurchaseResult(productPair: ProductPair, frequency: Int) {
-    def toCsvString: String = s"${productPair.toSortedString},$frequency"
-  }
-
+  
   def parseOrderLine(line: String): (Int, Int) = {
-    val fields = line.split(",")
-    require(fields.length >= 2, s"Invalid CSV format: $line")
-
-    (fields(0).toInt, fields(1).toInt)
+    val Array(customerId, productId) = line.split(",", 2)
+    (customerId.toInt, productId.toInt)
   }
 
-  def generateProductPairs(products: Iterable[Int]): List[ProductPair] = {
-    val productList = products.toList.distinct
-    productList.combinations(2)
-      .map(_.sorted)
-      .map { case List(p1, p2) => ProductPair(p1, p2) }
-      .toList
-  }
-
-  def extractProductPairs(orders: RDD[(Int, Int)]): RDD[ProductPair] = {
-    orders
-      .groupByKey()
-      .flatMapValues(generateProductPairs)
-      .values
-  }
-
-  def calculateCoPurchaseFrequencies(productPairs: RDD[ProductPair], nPartitions: Int): RDD[CoPurchaseResult] = {
-    productPairs
-      .map(pair => (pair, 1))
-      .partitionBy(new HashPartitioner(nPartitions))
-      .reduceByKey(_ + _)
-      .map { case (pair, count) => CoPurchaseResult(pair, count) }
-      // .sortBy(_.frequency, ascending = false)
+  def generateProductPairs(products: Array[Int]): Iterator[(Int, Int)] = {
+    val distinctProducts = products.distinct.sorted
+    for {
+      i <- distinctProducts.indices.iterator
+      j <- (i + 1 until distinctProducts.length).iterator
+    } yield (distinctProducts(i), distinctProducts(j))
   }
 
   def analyzeCoPurchases(inputPath: String, outputPath: String): Unit = {
@@ -50,42 +25,54 @@ object CoPurchaseAnalyzer {
       .config("spark.executor.memory", "6g")
       .config("spark.executor.cores", "4")
       .config("spark.driver.memory", "4g")
-      .master(sys.props.getOrElse("spark.master", "local[*]"))     
-      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer") 
+      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .master(sys.props.getOrElse("spark.master", "local[*]"))
       .getOrCreate()
 
-    val cores = spark.conf.get("spark.executor.cores", "4").toInt
-    val nodes = spark.conf.get("spark.executor.instances", "4").toInt
-    val numPartitions =
-      math.max(cores * nodes * 2, spark.sparkContext.defaultParallelism * 2)
+    val sc = spark.sparkContext
+    
+    // Calculate optimal partitions based on cluster size
+    val executorInstances = sc.getConf.get("spark.executor.instances", "4").toInt
+    val executorCores = sc.getConf.get("spark.executor.cores", "4").toInt
+    val partitions = executorInstances * executorCores * 3
     
     try {
-      // Register start time
-      val startTime = System.currentTimeMillis() 
+      val startTime = System.currentTimeMillis()
 
+      // Read and parse orders
+      val orders = sc.textFile(inputPath, partitions)
+        .map(parseOrderLine)
 
-      // Read and parse input data directly into tuples
-      val rawData = spark.sparkContext.textFile(inputPath)
-      val orders = rawData.map(parseOrderLine)
-      
-      // Extract product pairs from customer orders
-      val productPairs = extractProductPairs(orders)
-      
-      // Calculate frequencies and sort (with optimal partitioning)
-      val coPurchaseResults = calculateCoPurchaseFrequencies(productPairs, numPartitions)
-      
-      // Save results as CSV
-      val csvOutput = coPurchaseResults.map(_.toCsvString).repartition(1)
+      // Partition orders by customer for optimal distribution
+      val partitionedOrders = orders
+        .partitionBy(new HashPartitioner(partitions))
+
+      // Group by customer and generate product pairs
+      val productPairs = partitionedOrders
+        .groupByKey()
+        .flatMap { case (_, products) => 
+          generateProductPairs(products.toArray) 
+        }
+
+      // Count frequencies
+      val coPurchaseFrequencies = productPairs
+        .map((_, 1))
+        .reduceByKey(_ + _)
+
+      // Convert to CSV format and save with final repartition
+      val csvOutput = coPurchaseFrequencies
+        .map { case ((product1, product2), frequency) => 
+          s"$product1,$product2,$frequency" 
+        }
+        .repartition(1)
+        
       csvOutput.saveAsTextFile(outputPath)
-      
-      // Register end time
-      val endTime = System.currentTimeMillis()
 
-      // Calculate elapsed time 
+      val endTime = System.currentTimeMillis()
       val elapsedTime = endTime - startTime
       
-      println(s"Co-purchase analysis completed in ${elapsedTime}ms (${elapsedTime/1000.0}s)")
-      println(s"Results saved to: $outputPath")      
+      println(s"Analysis completed in ${elapsedTime}ms (${elapsedTime/1000.0}s)")
+      println(s"Results saved to: $outputPath")
     } finally {
       spark.stop()
     }
@@ -97,9 +84,6 @@ object CoPurchaseAnalyzer {
       System.exit(1)
     }
     
-    val inputPath = args(0)
-    val outputPath = args(1)
-    
-    analyzeCoPurchases(inputPath, outputPath)
+    analyzeCoPurchases(args(0), args(1))
   }
 }
