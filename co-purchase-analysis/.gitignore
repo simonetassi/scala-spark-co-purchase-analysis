@@ -1,10 +1,13 @@
 .bsp/
 
+inputs/order_products_restricted.csv
+inputs/order_products.csv
+
+output/
+
 project/
-project/target/
 
 target/
 target/streams/
 
 src/test/
-src/main/resources

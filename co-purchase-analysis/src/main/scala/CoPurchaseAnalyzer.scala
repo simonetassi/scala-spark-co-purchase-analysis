@@ -1,5 +1,3 @@
-package com.scp.app
-
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.HashPartitioner
 import org.apache.spark.rdd.RDD
@@ -81,6 +79,7 @@ object CoPurchaseAnalyzer {
   def main(args: Array[String]): Unit = {
     if (args.length != 2) {
       println("Usage: CoPurchaseAnalyzer <input_path> <output_path>")
+      println(args(0), args(1))
       System.exit(1)
     }
     
