@@ -1,0 +1,1 @@
+gsutil -m cp -r "gs://${BUCKET_NAME}/output" .
