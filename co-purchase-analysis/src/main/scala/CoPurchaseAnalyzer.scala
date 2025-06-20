@@ -5,8 +5,8 @@ import org.apache.spark.rdd.RDD
 object CoPurchaseAnalyzer {
   
   def parseOrderLine(line: String): (Int, Int) = {
-    val Array(customerId, productId) = line.split(",", 2)
-    (customerId.toInt, productId.toInt)
+    val Array(orderId, productId) = line.split(",", 2)
+    (orderId.toInt, productId.toInt)
   }
 
   def generateProductPairs(products: Array[Int]): Iterator[(Int, Int)] = {
@@ -33,7 +33,7 @@ object CoPurchaseAnalyzer {
     val executorInstances = sc.getConf.get("spark.executor.instances", "4").toInt
     val executorCores = sc.getConf.get("spark.executor.cores", "4").toInt
     val partitions = executorInstances * executorCores * 3
-    
+
     try {
       val startTime = System.currentTimeMillis()
 
@@ -41,11 +41,11 @@ object CoPurchaseAnalyzer {
       val orders = sc.textFile(inputPath, partitions)
         .map(parseOrderLine)
 
-      // Partition orders by customer for optimal distribution
+      // Partition orders by order for optimal distribution
       val partitionedOrders = orders
         .partitionBy(new HashPartitioner(partitions))
 
-      // Group by customer and generate product pairs
+      // Group by order and generate product pairs
       val productPairs = partitionedOrders
         .groupByKey()
         .flatMap { case (_, products) => 
@@ -79,7 +79,6 @@ object CoPurchaseAnalyzer {
   def main(args: Array[String]): Unit = {
     if (args.length != 2) {
       println("Usage: CoPurchaseAnalyzer <input_path> <output_path>")
-      println(args(0), args(1))
       System.exit(1)
     }
     
