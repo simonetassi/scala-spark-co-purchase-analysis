@@ -1,1 +1,1 @@
-gsutil -m cp -r "gs://${BUCKET_NAME}/output" .
+gsutil -m cp -r "gs://${BUCKET_NAME}/output" "${OUTPUT_PATH}"
