@@ -1,7 +1,6 @@
 .bsp/
 
-inputs/order_products_restricted.csv
-inputs/order_products.csv
+inputs/*order_products.csv
 
 output/
 
