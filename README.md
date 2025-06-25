@@ -67,6 +67,9 @@ Where:
     
 
 ### Google Cloud Platform Execution
+This project is designed to run on Google Cloud Platform. While standard gcloud CLI commands can be used for all operations (bucket creation, cluster management, resource uploads, and job submission), a comprehensive script suite has been provided to streamline the entire workflow.
+
+The included automation scripts handle the complete deployment pipeline, from initial setup through job execution. To use them simply follow the step-by-step instructions provided:
 
 1. **Configure gcloud CLI:**
     
