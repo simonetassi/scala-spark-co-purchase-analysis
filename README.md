@@ -109,7 +109,7 @@ The included automation scripts handle the complete deployment pipeline, from in
 
 ```
 co-purchase-analysis/
-├── inputs/               # Example input files 
+├── inputs/               # Input files 
 ├── src/main/scala/       # Scala Spark job implementation
 └── build.sbt             # SBT build configuration
 scripts/                  # GCP automation scripts
